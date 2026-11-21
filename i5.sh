@@ -1,6 +1,16 @@
 #!/bin/bash
-SOURCE_DIR="/root/ios"
-ADB_COMMAND="/usr/bin/adb"
+# Tự động nhận diện thư mục chứa script hiện tại
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SOURCE_DIR="$SCRIPT_DIR"
+
+# Tự động tìm lệnh adb (tương thích cả Termux và OpenWrt/Linux)
+if command -v adb >/dev/null 2>&1; then
+    ADB_COMMAND="$(command -v adb)"
+elif [ -x "/usr/bin/adb" ]; then
+    ADB_COMMAND="/usr/bin/adb"
+else
+    ADB_COMMAND="adb"
+fi
 
 # BẢNG MÀU ANSI 
 RED='\033[0;31m'  
@@ -25,37 +35,53 @@ print_header() {
     clear
     echo -e "${BCYAN}🚀 TRÌNH CÀI TIẾNG VIỆT CHO XIAOMI BY KHÁNH IT${NC}"
     echo -e "${BGREEN}📞 Hotline: 0967.341.608${NC}"
-    echo -e "${WHITE}📦 Phiên bản: Hometv Cập Nhật: 21-11-2026${NC}"
+    echo -e "${WHITE}📦 Phiên bản: Hometv (Android 5-6) Cập Nhật: 21-11-2026${NC}"
     echo
 }
 
-# =================== KHỐI LỆNH CÀI APK ===================
+# =================== KHỐI LỆNH CÀI APK (TỐI ƯU CHO ANDROID 5-6) ===================
 install_apk() {
     local apk_file="$1"
-    if [ -f "$apk_file" ]; then
-        echo -e "→ Đang cài ứng dụng: ${BCYAN}$apk_file${NC}"
-        if $ADB_COMMAND install -r -g "$apk_file" > /dev/null 2>&1; then
-            echo -e "${BGREEN}📁 ✓ Cài Đặt ứng dụng Thành Công !${NC}"
-        else
-            echo -e "${BRED}📁 ✗ Cài Đặt Thất Bại !${NC}"
-        fi
+    if [ ! -f "$apk_file" ]; then
+        echo -e "${BYELLOW}⚠ Không tìm thấy file: $apk_file (Tại: $PWD)${NC}"
+        return
+    fi
+
+    echo -e "→ Đang cài ứng dụng: ${BCYAN}$apk_file${NC}"
+    
+    # Đẩy file vào /data/local/tmp/ để cài trực tiếp qua pm install (tránh lỗi streaming trên Android 5-6)
+    if ! $ADB_COMMAND push "$apk_file" "/data/local/tmp/temp_app.apk" >/dev/null 2>&1; then
+        echo -e "${BRED}📁 ✗ Lỗi đẩy file APK vào bộ nhớ tạm TV !${NC}"
+        return
+    fi
+
+    local output
+    # Kiểm tra SDK của TV: Android 6.0 (SDK 23) trở lên hỗ trợ -g, Android 5 (SDK 21-22) dùng -r
+    if [ "${SDK:-0}" -ge 23 ]; then
+        output=$($ADB_COMMAND shell pm install -r -g "/data/local/tmp/temp_app.apk" 2>&1)
     else
-        echo -e "${BYELLOW}⚠ Không tìm thấy file: $apk_file${NC}"
+        output=$($ADB_COMMAND shell pm install -r "/data/local/tmp/temp_app.apk" 2>&1)
+    fi
+
+    # Dọn dẹp file tạm ngay sau khi cài
+    $ADB_COMMAND shell rm -f "/data/local/tmp/temp_app.apk" >/dev/null 2>&1
+
+    if echo "$output" | grep -q "Success"; then
+        echo -e "${BGREEN}📁 ✓ Cài Đặt ứng dụng Thành Công !${NC}"
+    else
+        echo -e "${BRED}📁 ✗ Cài Đặt Thất Bại !${NC}"
+        echo -e "${YELLOW}   Lý do: $(echo "$output" | tr -d '\r' | tail -n 1)${NC}"
     fi
 }
 
 # =================== KIỂM TRA MÔI TRƯỜNG ===================
 check_adb() {
     if ! $ADB_COMMAND version >/dev/null 2>&1; then
-        echo -e "${RED}❌ adb chưa sẵn sàng. Hãy chạy:${NC}"
-        echo "apk add android-tools bash"
+        echo -e "${RED}❌ adb chưa sẵn sàng. Hãy cài android-tools trước:${NC}"
+        echo "pkg install android-tools (Termux) hoặc apk add android-tools (OpenWrt)"
         exit 1
     fi
-    if [ -d "$SOURCE_DIR" ]; then
-        cd "$SOURCE_DIR" || exit 1
-    else
-        echo -e "${BYELLOW}⚠ Không tìm thấy thư mục nguồn $SOURCE_DIR, chạy tại thư mục hiện tại.${NC}"
-    fi
+    cd "$SOURCE_DIR" || exit 1
 }
 
 # =================== MENU 1: KẾT NỐI TV ===================
@@ -136,6 +162,7 @@ menu2() {
         SDK=$($ADB_COMMAND shell getprop ro.build.version.sdk | tr -d '\r')
         DEVICE=$($ADB_COMMAND shell getprop ro.product.device | tr -d '\r')
         [ -z "$PANEL" ] && PANEL="?"
+        [ -z "$SDK" ] && SDK="22"
         
         echo -e "${BYELLOW}────────────────────────────────────────${NC}"
         echo -e "${CYAN}📺${NC} ${WHITE}$MODEL${NC} ${BYELLOW}|${NC} ${YELLOW}$BRAND${NC} ${BYELLOW}|${NC} ${BGREEN}Tivi (${PANEL} Inch)${NC}"
@@ -177,7 +204,12 @@ install_hometv56() {
     echo -e "${BBLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo
 
-    echo -e "${BYELLOW}[1/6] Đang cài đặt và cấp quyền Launcher chính...${NC}"
+    echo -e "${BYELLOW}[1/6] Đang mở khóa cài đặt & cài Launcher chính...${NC}"
+    # Đảm bảo bật nguồn không xác định và tắt chặn xác minh ADB trên TV
+    $ADB_COMMAND shell settings put secure install_non_market_apps 1 >/dev/null 2>&1
+    $ADB_COMMAND shell settings put global install_non_market_apps 1 >/dev/null 2>&1
+    $ADB_COMMAND shell settings put global verifier_verify_adb_installs 0 >/dev/null 2>&1
+
     install_apk "hometv.apk"
 
     pkg="com.xiaomi.haki"
@@ -266,7 +298,8 @@ install_hometv56() {
         "am start -n com.xiaomi.haki/com.xiaomi.haki.activity.MainActivity" \
         "am force-stop com.xiaomi.haki" \
         "am start -n com.xiaomi.haki/com.xiaomi.haki.activity.Home" \
-        "cmd package set-home-activity com.xiaomi.haki/com.xiaomi.haki.activity.Home"
+        "cmd package set-home-activity com.xiaomi.haki/com.xiaomi.haki.activity.Home" \
+        "am start -a android.intent.action.MAIN -c android.intent.category.HOME"
     do
         $ADB_COMMAND shell "$final_cmd" >/dev/null 2>&1
     done
@@ -276,6 +309,7 @@ install_hometv56() {
     sleep 2
 
     echo -e "${BGREEN}✅ CÀI ĐẶT GIAO DIỆN HOME TV 5-6 HOÀN TẤT THÀNH CÔNG!${NC}"
+    echo -e "${BYELLOW}ℹ️  Nếu trên TV hiện bảng chọn Màn hình chính, hãy chọn Home TV -> Always (Luôn chọn).${NC}"
     read -p "$(echo -e "${WHITE}Nhấn Enter để quay lại Menu...${NC}")"
 }
 
@@ -284,6 +318,11 @@ install_all_apks() {
     echo -e "${BBLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "   ${BGREEN}✔${WHITE} CÀI APP MỚI CHO TIVI 2026${NC}"
     echo -e "${BBLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    
+    $ADB_COMMAND shell settings put secure install_non_market_apps 1 >/dev/null 2>&1
+    $ADB_COMMAND shell settings put global install_non_market_apps 1 >/dev/null 2>&1
+    $ADB_COMMAND shell settings put global verifier_verify_adb_installs 0 >/dev/null 2>&1
+
     apks_to_install="
       3.apk 
       4.apk 
