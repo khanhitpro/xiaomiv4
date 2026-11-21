@@ -35,7 +35,7 @@ print_header() {
     clear
     echo -e "${BCYAN}🚀 TRÌNH CÀI TIẾNG VIỆT CHO XIAOMI BY KHÁNH IT${NC}"
     echo -e "${BGREEN}📞 Hotline: 0967.341.608${NC}"
-    echo -e "${WHITE}📦 Phiên bản: Home TV (com.home.miuixiaomi) Cập Nhật: 21-11-2026${NC}"
+    echo -e "${WHITE}📦 Phiên bản: V6.0    Cập Nhật: 21-11-2026${NC}"
     echo
 }
 
@@ -49,21 +49,18 @@ install_apk() {
 
     echo -e "→ Đang cài ứng dụng: ${BCYAN}$apk_file${NC}"
     
-    # Đẩy file vào /data/local/tmp/ để cài trực tiếp qua pm install (tránh lỗi streaming trên Android 5-6)
     if ! $ADB_COMMAND push "$apk_file" "/data/local/tmp/temp_app.apk" >/dev/null 2>&1; then
         echo -e "${BRED}📁 ✗ Lỗi đẩy file APK vào bộ nhớ tạm TV !${NC}"
         return
     fi
 
     local output
-    # Kiểm tra SDK của TV: Android 6.0 (SDK 23) trở lên hỗ trợ -g, Android 5 (SDK 21-22) dùng -r
     if [ "${SDK:-0}" -ge 23 ]; then
         output=$($ADB_COMMAND shell pm install -r -g "/data/local/tmp/temp_app.apk" 2>&1)
     else
         output=$($ADB_COMMAND shell pm install -r "/data/local/tmp/temp_app.apk" 2>&1)
     fi
 
-    # Dọn dẹp file tạm ngay sau khi cài
     $ADB_COMMAND shell rm -f "/data/local/tmp/temp_app.apk" >/dev/null 2>&1
 
     if echo "$output" | grep -q "Success"; then
@@ -173,7 +170,7 @@ menu2() {
         echo
         echo -e "${BMAGENTA}📋 MENU CÀI ĐẶT GIAO DIỆN TIẾNG VIỆT CHO TIVI${NC}"
         echo
-        echo -e "${GREEN}⛔ 1.${NC} ${BGREEN}⭐ CÀI TIẾNG VIỆT & HOME TV MỚI (MIUI XIAOMI)${NC}"
+        echo -e "${GREEN}⛔ 1.${NC} ${BGREEN}⭐ CÀI TIẾNG VIỆT & HOME TV${NC}"
         echo -e "${GREEN}⛔ 2.${NC} ${WHITE}🖼️ CẬP NHẬT APP MỚI LÊN TV${NC}"
         echo -e "${GREEN}⛔ 3.${NC} ${BYELLOW}🔄 KHỞI ĐỘNG LẠI TV (REBOOT)${NC}"
         echo -e "${GREEN}⛔ 4.${NC} ${BRED}⚠️ XOÁ SẠCH DỮ LIỆU TIVI KHỞI ĐỘNG VÀO RESET CỨNG${NC}"
@@ -184,7 +181,7 @@ menu2() {
         read -p "$(echo -e "${BGREEN}→ Nhập tùy chọn của bạn [1-6]:${NC} ")" CHOICE
 
         case $CHOICE in
-            1) install_hometv_new ;;
+            1) install_hometv_new; break ;;
             2) install_all_apks ;;
             3) reboot_tv "normal"; break ;;
             4) reboot_tv "recovery"; break ;;
@@ -197,15 +194,14 @@ menu2() {
 
 # =================== CHỨC NĂNG ===================
 
-# CHỨC NĂNG 1: CÀI GIAO DIỆN HOME TV MỚI (com.home.miuixiaomi)
+# CHỨC NĂNG 1: CÀI GIAO DIỆN HOME TV MỚI (com.home.miuixiaomi) + TỰ KHỞI ĐỘNG LẠI
 install_hometv_new() {
     echo -e "${BBLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "   ${BGREEN}✔${WHITE} CÀI GIAO DIỆN HOME TV MỚI (MIUI XIAOMI)${NC}"
+    echo -e "   ${BGREEN}✔${WHITE} CÀI GIAO DIỆN HOME TV MIUI XIAOMI${NC}"
     echo -e "${BBLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo
 
     echo -e "${BYELLOW}[1/6] Đang mở khóa cài đặt & cài Home TV mới...${NC}"
-    # Đảm bảo bật nguồn không xác định và tắt chặn xác minh ADB trên TV
     $ADB_COMMAND shell settings put secure install_non_market_apps 1 >/dev/null 2>&1
     $ADB_COMMAND shell settings put global install_non_market_apps 1 >/dev/null 2>&1
     $ADB_COMMAND shell settings put global verifier_verify_adb_installs 0 >/dev/null 2>&1
@@ -231,7 +227,11 @@ install_hometv_new() {
     $ADB_COMMAND shell appops set "$pkg" SYSTEM_ALERT_WINDOW allow >/dev/null 2>&1
     $ADB_COMMAND shell appops set "$pkg" MANAGE_EXTERNAL_STORAGE allow >/dev/null 2>&1
     $ADB_COMMAND shell appwidget grantbind --package "$pkg" --user 0 >/dev/null 2>&1
-
+    $ADB_COMMAND shell pm set-home-activity "$pkg/.MainActivity" >/dev/null 2>&1
+    $ADB_COMMAND shell cmd package set-home-activity "$pkg/.MainActivity" >/dev/null 2>&1
+    $ADB_COMMAND shell am force-stop "$pkg" >/dev/null 2>&1
+    $ADB_COMMAND shell am start -W -n "$pkg/.MainActivity" >/dev/null 2>&1
+	
     echo -e "${BYELLOW}[2/6] Đang gỡ bỏ và vô hiệu hóa ứng dụng rác & trợ lý gốc...${NC}"
     local apps="com.mitv.tvhome com.android.tv.settings com.mitv.gallery com.xiaomi.tweather \
         com.mitv.screensaver com.xiaomi.mitv.shop com.duokan.videodaily com.xiaomi.tv.gallery \
@@ -284,27 +284,33 @@ install_hometv_new() {
         $ADB_COMMAND shell "$cmd" >/dev/null 2>&1
     done
 
-    echo -e "${BYELLOW}[6/6] 🏠 Đang thiết lập Home TV mới làm màn hình chính mặc định...${NC}"
-    # Cấp lại quyền 1 lần nữa để đảm bảo chắc chắn trên mọi phiên bản Android
+    echo -e "${BYELLOW}[6/6] 🏠 Cấp lại quyền, đặt mặc định & mở giao diện Home TV mới...${NC}"
     for perm in $runtime_perms; do
         $ADB_COMMAND shell pm grant "$pkg" "$perm" >/dev/null 2>&1
     done
+    $ADB_COMMAND shell appops set "$pkg" SYSTEM_ALERT_WINDOW allow >/dev/null 2>&1
+    $ADB_COMMAND shell appops set "$pkg" MANAGE_EXTERNAL_STORAGE allow >/dev/null 2>&1
 
-    for final_cmd in \
-        "cmd package set-home-activity $pkg/.MainActivity" \
-        "am start -n $pkg/.MainActivity" \
-        "am start -a android.intent.action.MAIN -c android.intent.category.HOME"
-    do
-        $ADB_COMMAND shell "$final_cmd" >/dev/null 2>&1
-    done
+    # Đặt làm Home mặc định (tương thích cả Android 5-6 và Android 7-14)
+    $ADB_COMMAND shell pm set-home-activity "$pkg/.MainActivity" >/dev/null 2>&1
+    $ADB_COMMAND shell cmd package set-home-activity "$pkg/.MainActivity" >/dev/null 2>&1
 
-    echo -e "${BYELLOW}🔄 Đang đồng bộ dữ liệu ổ cứng TV...${NC}"
+    # Khởi động tiến trình Home mới trước khi reboot
+    $ADB_COMMAND shell am force-stop "$pkg" >/dev/null 2>&1
+    sleep 1
+    $ADB_COMMAND shell am start -W -n "$pkg/.MainActivity" >/dev/null 2>&1
+    $ADB_COMMAND shell input keyevent 3 >/dev/null 2>&1
+
+    echo -e "${BYELLOW}🔄 Đang đồng bộ dữ liệu ổ cứng TV trước khi khởi động lại...${NC}"
     $ADB_COMMAND shell sync >/dev/null 2>&1
     sleep 2
 
-    echo -e "${BGREEN}✅ CÀI ĐẶT GIAO DIỆN HOME TV MỚI HOÀN TẤT THÀNH CÔNG!${NC}"
-    echo -e "${BYELLOW}ℹ️  Nếu trên TV hiện bảng chọn Màn hình chính, hãy chọn Home TV -> Always (Luôn chọn).${NC}"
-    read -p "$(echo -e "${WHITE}Nhấn Enter để quay lại Menu...${NC}")"
+    echo -e "${BGREEN}✅ CÀI ĐẶT GIAO DIỆN HOME TV MỚI HOÀN TẤT!${NC}"
+    echo -e "${BYELLOW}🔄 Tivi sẽ tự động khởi động lại sau 2 giây...${NC}"
+    sleep 2
+
+    # Tự động khởi động lại Tivi và quay về Menu 1
+    reboot_tv "normal"
 }
 
 # CHỨC NĂNG 2: CẬP NHẬT APP MỚI CHO TIVI XIAOMI
