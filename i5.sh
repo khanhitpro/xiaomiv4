@@ -35,11 +35,11 @@ print_header() {
     clear
     echo -e "${BCYAN}🚀 TRÌNH CÀI TIẾNG VIỆT CHO XIAOMI BY KHÁNH IT${NC}"
     echo -e "${BGREEN}📞 Hotline: 0967.341.608${NC}"
-    echo -e "${WHITE}📦 Phiên bản: Hometv (Android 5-6) Cập Nhật: 21-11-2026${NC}"
+    echo -e "${WHITE}📦 Phiên bản: Home TV (com.home.miuixiaomi) Cập Nhật: 21-11-2026${NC}"
     echo
 }
 
-# =================== KHỐI LỆNH CÀI APK (TỐI ƯU CHO ANDROID 5-6) ===================
+# =================== KHỐI LỆNH CÀI APK (TỐI ƯU CHO ANDROID 5-14) ===================
 install_apk() {
     local apk_file="$1"
     if [ ! -f "$apk_file" ]; then
@@ -173,7 +173,7 @@ menu2() {
         echo
         echo -e "${BMAGENTA}📋 MENU CÀI ĐẶT GIAO DIỆN TIẾNG VIỆT CHO TIVI${NC}"
         echo
-        echo -e "${GREEN}⛔ 1.${NC} ${BGREEN}⭐ CÀI TIẾNG VIỆT HOME TV 5-6${NC}"
+        echo -e "${GREEN}⛔ 1.${NC} ${BGREEN}⭐ CÀI TIẾNG VIỆT & HOME TV MỚI (MIUI XIAOMI)${NC}"
         echo -e "${GREEN}⛔ 2.${NC} ${WHITE}🖼️ CẬP NHẬT APP MỚI LÊN TV${NC}"
         echo -e "${GREEN}⛔ 3.${NC} ${BYELLOW}🔄 KHỞI ĐỘNG LẠI TV (REBOOT)${NC}"
         echo -e "${GREEN}⛔ 4.${NC} ${BRED}⚠️ XOÁ SẠCH DỮ LIỆU TIVI KHỞI ĐỘNG VÀO RESET CỨNG${NC}"
@@ -184,7 +184,7 @@ menu2() {
         read -p "$(echo -e "${BGREEN}→ Nhập tùy chọn của bạn [1-6]:${NC} ")" CHOICE
 
         case $CHOICE in
-            1) install_hometv56 ;;
+            1) install_hometv_new ;;
             2) install_all_apks ;;
             3) reboot_tv "normal"; break ;;
             4) reboot_tv "recovery"; break ;;
@@ -197,51 +197,48 @@ menu2() {
 
 # =================== CHỨC NĂNG ===================
 
-# CHỨC NĂNG 1: CÀI GIAO DIỆN HOME TV 5-6
-install_hometv56() {
+# CHỨC NĂNG 1: CÀI GIAO DIỆN HOME TV MỚI (com.home.miuixiaomi)
+install_hometv_new() {
     echo -e "${BBLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "   ${BGREEN}✔${WHITE} CÀI GIAO DIỆN HOME TV 5-6${NC}"
+    echo -e "   ${BGREEN}✔${WHITE} CÀI GIAO DIỆN HOME TV MỚI (MIUI XIAOMI)${NC}"
     echo -e "${BBLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo
 
-    echo -e "${BYELLOW}[1/6] Đang mở khóa cài đặt & cài Launcher chính...${NC}"
+    echo -e "${BYELLOW}[1/6] Đang mở khóa cài đặt & cài Home TV mới...${NC}"
     # Đảm bảo bật nguồn không xác định và tắt chặn xác minh ADB trên TV
     $ADB_COMMAND shell settings put secure install_non_market_apps 1 >/dev/null 2>&1
     $ADB_COMMAND shell settings put global install_non_market_apps 1 >/dev/null 2>&1
     $ADB_COMMAND shell settings put global verifier_verify_adb_installs 0 >/dev/null 2>&1
 
+    # Gỡ bản haki cũ nếu có trên máy để tránh xung đột Launcher
+    $ADB_COMMAND shell pm uninstall --user 0 com.xiaomi.haki >/dev/null 2>&1
+
     install_apk "hometv.apk"
 
-    pkg="com.xiaomi.haki"
-    runtime_perms="android.permission.CHANGE_CONFIGURATION \
+    local pkg="com.home.miuixiaomi"
+    local runtime_perms="android.permission.RECORD_AUDIO \
+        android.permission.BLUETOOTH_CONNECT \
+        android.permission.WRITE_SECURE_SETTINGS \
+        android.permission.CHANGE_CONFIGURATION \
         android.permission.WRITE_EXTERNAL_STORAGE \
-        android.permission.READ_EXTERNAL_STORAGE"
+        android.permission.READ_EXTERNAL_STORAGE \
+        android.permission.READ_MEDIA_IMAGES"
 
     for perm in $runtime_perms; do
         $ADB_COMMAND shell pm grant "$pkg" "$perm" >/dev/null 2>&1
     done
+
+    $ADB_COMMAND shell appops set "$pkg" SYSTEM_ALERT_WINDOW allow >/dev/null 2>&1
+    $ADB_COMMAND shell appops set "$pkg" MANAGE_EXTERNAL_STORAGE allow >/dev/null 2>&1
     $ADB_COMMAND shell appwidget grantbind --package "$pkg" --user 0 >/dev/null 2>&1
 
-    for act in \
-        "am start -n com.xiaomi.haki/com.xiaomi.haki.activity.MainActivity" \
-        "am start -n com.xiaomi.haki/com.xiaomi.haki.activity.Home" \
-        "am force-stop com.xiaomi.haki" \
-        "am start -n com.xiaomi.haki/com.xiaomi.haki.activity.Home" \
-        "am start -n com.xiaomi.haki/com.xiaomi.haki.activity.MainActivity" \
-        "am force-stop com.xiaomi.haki" \
-        "am start -n com.xiaomi.haki/com.xiaomi.haki.activity.Home" \
-        "am start -n com.xiaomi.haki/com.xiaomi.haki.activity.MainActivity"
-    do
-        $ADB_COMMAND shell "$act" >/dev/null 2>&1
-    done
-
-    echo -e "${BYELLOW}[2/6] Đang gỡ bỏ và vô hiệu hóa ứng dụng rác (Bloatware)...${NC}"
-    apps="com.mitv.tvhome com.android.tv.settings com.mitv.gallery com.xiaomi.tweather \
+    echo -e "${BYELLOW}[2/6] Đang gỡ bỏ và vô hiệu hóa ứng dụng rác & trợ lý gốc...${NC}"
+    local apps="com.mitv.tvhome com.android.tv.settings com.mitv.gallery com.xiaomi.tweather \
         com.mitv.screensaver com.xiaomi.mitv.shop com.duokan.videodaily com.xiaomi.tv.gallery \
-        com.mitv.cloudcontrol com.miui.tv.analytics com.xiaomi.voicecontrol com.xiaomi.mitv.upgrade \
-        com.xiaomi.mitv.appstore com.xiaomi.mitv.calendar com.xiaomi.mitv.handbook \
-        com.xiaomi.screenrecorder com.droidlogic.imageplayer com.sohu.inputmethod.sogou.tv \
-        com.xiaomi.mitv.karaoke.service"
+        com.mitv.cloudcontrol com.miui.tv.analytics com.xiaomi.voicecontrol com.xiaomi.voiceassistant \
+        com.miui.voiceassist com.xiaomi.mitv.upgrade com.xiaomi.mitv.appstore com.xiaomi.mitv.calendar \
+        com.xiaomi.mitv.handbook com.xiaomi.screenrecorder com.droidlogic.imageplayer \
+        com.sohu.inputmethod.sogou.tv com.xiaomi.mitv.karaoke.service"
 
     for app in $apps; do
         $ADB_COMMAND shell pm uninstall --user 0 "$app" >/dev/null 2>&1
@@ -250,7 +247,7 @@ install_hometv56() {
 
     echo -e "${BCYAN}[3/6] 📦 Bắt đầu cài đặt các ứng dụng phụ trợ...${NC}"
     echo
-    apks_to_install="
+    local apks_to_install="
       1.apk
       2.apk
       3.apk
@@ -261,6 +258,10 @@ install_hometv56() {
     for apk in $apks_to_install; do
         install_apk "$apk"
     done
+
+    # Cấp quyền micro & bộ nhớ cho các app vệ tinh sau khi cài xong
+    $ADB_COMMAND shell pm grant com.android5.truyenhinh android.permission.RECORD_AUDIO >/dev/null 2>&1
+    $ADB_COMMAND shell pm grant com.khanhitpro.wallpaperchanger android.permission.WRITE_EXTERNAL_STORAGE >/dev/null 2>&1
 
     echo -e "${BCYAN}[4/6] 🖼️ Đang nạp dữ liệu ảnh nền...${NC}"
     copy_wallpapers
@@ -276,29 +277,22 @@ install_hometv56() {
         "settings put global animator_duration_scale 0" \
         "settings put global transition_animation_scale 0" \
         "settings put global window_animation_scale 0" \
-        "settings put secure enabled_accessibility_services com.mitv.shareds/com.mitv.shareds.HomeService" \
-        "settings put secure accessibility_enabled 1" \
         "ime enable com.liskovsoft.leankeyboard/.ime.LeanbackImeService" \
         "settings put secure default_input_method com.liskovsoft.leankeyboard/.ime.LeanbackImeService" \
-        "appops set com.google.android.katniss SYSTEM_ALERT_WINDOW allow" \
-        "settings put secure enabled_accessibility_services com.xiaomi.haki/com.xiaomi.haki.voicecontrol.VoiceAccessibilityService"
+        "appops set com.google.android.katniss SYSTEM_ALERT_WINDOW allow"
     do
         $ADB_COMMAND shell "$cmd" >/dev/null 2>&1
     done
 
-    echo -e "${BYELLOW}[6/6] 🏠 Đang thiết lập Launcher mặc định khi bật TV...${NC}"
+    echo -e "${BYELLOW}[6/6] 🏠 Đang thiết lập Home TV mới làm màn hình chính mặc định...${NC}"
+    # Cấp lại quyền 1 lần nữa để đảm bảo chắc chắn trên mọi phiên bản Android
     for perm in $runtime_perms; do
         $ADB_COMMAND shell pm grant "$pkg" "$perm" >/dev/null 2>&1
     done
-    $ADB_COMMAND shell appops set com.google.android.katniss SYSTEM_ALERT_WINDOW allow >/dev/null 2>&1
-    $ADB_COMMAND shell appwidget grantbind --package "$pkg" --user 0 >/dev/null 2>&1
 
     for final_cmd in \
-        "am start -n com.xiaomi.haki/com.xiaomi.haki.activity.Home" \
-        "am start -n com.xiaomi.haki/com.xiaomi.haki.activity.MainActivity" \
-        "am force-stop com.xiaomi.haki" \
-        "am start -n com.xiaomi.haki/com.xiaomi.haki.activity.Home" \
-        "cmd package set-home-activity com.xiaomi.haki/com.xiaomi.haki.activity.Home" \
+        "cmd package set-home-activity $pkg/.MainActivity" \
+        "am start -n $pkg/.MainActivity" \
         "am start -a android.intent.action.MAIN -c android.intent.category.HOME"
     do
         $ADB_COMMAND shell "$final_cmd" >/dev/null 2>&1
@@ -308,7 +302,7 @@ install_hometv56() {
     $ADB_COMMAND shell sync >/dev/null 2>&1
     sleep 2
 
-    echo -e "${BGREEN}✅ CÀI ĐẶT GIAO DIỆN HOME TV 5-6 HOÀN TẤT THÀNH CÔNG!${NC}"
+    echo -e "${BGREEN}✅ CÀI ĐẶT GIAO DIỆN HOME TV MỚI HOÀN TẤT THÀNH CÔNG!${NC}"
     echo -e "${BYELLOW}ℹ️  Nếu trên TV hiện bảng chọn Màn hình chính, hãy chọn Home TV -> Always (Luôn chọn).${NC}"
     read -p "$(echo -e "${WHITE}Nhấn Enter để quay lại Menu...${NC}")"
 }
@@ -323,7 +317,7 @@ install_all_apks() {
     $ADB_COMMAND shell settings put global install_non_market_apps 1 >/dev/null 2>&1
     $ADB_COMMAND shell settings put global verifier_verify_adb_installs 0 >/dev/null 2>&1
 
-    apks_to_install="
+    local apks_to_install="
       3.apk 
       4.apk 
       5.apk
